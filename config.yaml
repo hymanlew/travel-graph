@@ -1,0 +1,23 @@
+llm:
+  openai:
+    provider: "openai"
+    model_name: "o4-mini"
+  groq:
+    provider: "groq"
+    model_name: "deepseek-r1-distill-llama-70b"
+
+SPARKAI_APP_ID:
+SPARKAI_API_SECRET:
+SPARKAI_API_KEY:
+Weather_APP_KEY:
+amap_key:
+TAVILY_API_KEY:
+
+OPENAI_API_KEY:
+GROQ_API_KEY:
+GOOGLE_API_KEY:
+GPLACES_API_KEY:
+FOURSQUARE_API_KEY:
+TAVILAY_API_KEY:
+OPENWEATHERMAP_API_KEY:
+EXCHANGE_RATE_API_KEY:

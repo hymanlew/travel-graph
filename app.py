@@ -230,7 +230,7 @@ def embedding_make(text_input, pdf_directory):
         # all_pdf_pages = []
         all_text = ''
         for city in city_list:
-            from pdf_read import FileOperation
+            from core.loader.pdf_read import FileOperation
             file_opr = FileOperation()
             try:
                 text, error = file_opr.read(city)
