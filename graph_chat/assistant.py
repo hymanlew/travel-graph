@@ -1,7 +1,8 @@
 import os
 from datetime import datetime
-
+from typing import Any, Dict
 from langchain_community.tools import TavilySearchResults
+from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
 from langchain.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.runnables import Runnable, RunnableConfig
 from langchain_openai import ChatOpenAI
@@ -49,8 +50,9 @@ class CtripAssistant:
             # user_id = config.get('configurable', {}).get('passenger_id', None)
             # state = {**state, 'user_info': user_id}  # 从配置中得到旅客的ID，也追加到state
             result = self.runnable.invoke(state)
+            # 如果结果中没有工具调用，并且内容为空或内容列表的第一个元素没有"text"，则需要重新提示用户输入。
             # 如果，runnable执行完后，没有得到一个实际的输出
-            if not result.tool_calls and (  # 如果结果中没有工具调用，并且内容为空或内容列表的第一个元素没有"text"，则需要重新提示用户输入。
+            if not result.tool_calls and (
                     not result.content
                     or isinstance(result.content, list)
                     and not result.content[0].get("text")
@@ -99,5 +101,5 @@ def create_assistant_node():
             ToBookExcursion,  # 用于转交旅行推荐和其他游览预订的任务
         ]
     )
-    return assistant_runnable
+    return CtripAssistant(assistant_runnable)
 
