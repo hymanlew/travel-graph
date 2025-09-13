@@ -2,9 +2,17 @@ import os
 from dotenv import load_dotenv
 from typing import Literal, Optional, Any
 from pydantic import BaseModel, Field
-from utils.config_loader import load_config
 from langchain_groq import ChatGroq
 from langchain_openai import ChatOpenAI
+import yaml
+import os
+
+
+def load_config(config_path: str = "config.yaml") -> dict:
+    with open(config_path, "r") as file:
+        config = yaml.safe_load(file)
+        # print(config)
+    return config
 
 
 class ConfigLoader:

@@ -22,7 +22,6 @@ def update_dates():
     """
     # 使用备份文件覆盖现有文件，作为重置步骤
     shutil.copy(backup_file, local_file)  # 如果目标路径已经存在一个同名文件，shutil.copy 会覆盖该文件。
-
     conn = sqlite3.connect(local_file)
     # cursor = conn.cursor()
 

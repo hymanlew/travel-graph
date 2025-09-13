@@ -1,4 +1,4 @@
-from utils.expense_calculator import Calculator
+from tools.calculator_tool import Calculator
 from typing import List
 from langchain.tools import tool
 

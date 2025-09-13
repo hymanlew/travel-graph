@@ -7,9 +7,8 @@ from langgraph.graph import StateGraph
 from langgraph.prebuilt import tools_condition
 from tools.flights_tools import fetch_user_flight_information
 from graph_chat.assistant import create_assistant_node, safe_tools, sensitive_tools, sensitive_tool_names
-from graph_chat.draw_png import draw_graph
 from graph_chat.state import State
-from tools.init_db import update_dates
+from utils.init_db import update_dates
 from tools.tools_handler import create_tool_node_with_fallback, _print_event
 
 # 定义了一个流程图的构建对象

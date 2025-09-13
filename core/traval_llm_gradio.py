@@ -7,9 +7,6 @@ from sparkai.core.messages import ChatMessage, AIMessageChunk
 from dwspark.config import Config
 from dwspark.models import ChatModel, ImageUnderstanding, Text2Audio, Audio2Text, EmbeddingModel,Text2Img
 from PIL import Image
-import io
-import base64
-import random
 from langchain_community.vectorstores import Chroma
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.document_loaders import PyMuPDFLoader
@@ -20,7 +17,7 @@ import re
 import time
 import json
 import numpy as np
-from text2audio.infer import audio2lip
+from utils.text2video import text2video
 # 日志
 from loguru import logger
 from langchain_community.tools.tavily_search import TavilySearchResults
@@ -35,22 +32,21 @@ SPARKAI_APP_ID = os.environ.get("SPARKAI_APP_ID")
 SPARKAI_API_SECRET = os.environ.get("SPARKAI_API_SECRET")
 SPARKAI_API_KEY = os.environ.get("SPARKAI_API_KEY")
 
-
 config = Config(SPARKAI_APP_ID, SPARKAI_API_KEY, SPARKAI_API_SECRET)
-
 dashscope.api_key = os.environ.get("dashscope_api_key")
 
-
+# 讯飞星火大模型的 Python SDK，dwspark 并非讯飞官方直接提供，而是由 Datawhale 团队封装的第三方 SDK，旨在简化星火大模型 API 的调用过程，
+# 提升开发效率。它集成了星火大模型的多模态能力，并提供了一套相对简洁易用的接口。
 # 初始化模型
 iu = ImageUnderstanding(config)
 t2a = Text2Audio(config)
 a2t = Audio2Text(config)
 t2i = Text2Img(config)
+
 # 临时存储目录
 TEMP_IMAGE_DIR = "/tmp/sparkai_images/"
 #AUDIO_TEMP_DIR = "/tmp/sparkai_audios/"
 TEMP_AUDIO_DIR = "./static"
-
 style_options = ["朋友圈", "小红书", "微博", "抖音"]
 
 # 保存图片并获取临时路径
@@ -81,7 +77,7 @@ def text_to_audio(text_input):
     except Exception as e:
         print(f"Error generating audio: {e}")
 
-# 第一阶段：用户上传图片并选择风格后，点击生成文案
+# 第一阶段：用户上传图片并选择风格后，点击生成文案（根据图片内容描述，生成指定风格文案）
 def on_generate_click(image, style):
     generated_text = generate_text_from_image(image, style)
     return generated_text
@@ -90,9 +86,9 @@ def on_generate_click(image, style):
 def on_convert_click(text_output):
     return text_to_audio(text_output)
 
-# 第三阶段：点击“将文案转为数字人视频”按钮，生成并播放语音
+# 第三阶段：点击“将文案转为数字人视频”按钮，生成并播放语音视频
 def on_lip_click(text_output,video_path='./shuziren.mp4'):
-    video_output = audio2lip(text_output,video_path)
+    video_output = text2video(text_output,video_path)
     return video_output
 
 #音频处理函数
@@ -105,6 +101,7 @@ def process_audio_file(audio_path):
     audio_segment.export(temp_filepath, format="mp3")
     return temp_filepath
 
+# 大模型根据语音内容（转文本后）生成响应
 def process_audio(audio, history):
     print(f"接收到的音频: {audio}, 类型: {type(audio)}")  # Debugging information
 
@@ -134,9 +131,6 @@ def process_audio(audio, history):
 
     return "无效的音频文件，请上传有效的音频。", history
 
-
-rerank_path = './model/rerank_model'
-rerank_model_name = 'BAAI/bge-reranker-large'
 def extract_cities_from_text(text):
     # 从文本中提取城市名称，假设使用jieba进行分词和提取地名
     import jieba.posseg as pseg
@@ -155,7 +149,7 @@ def find_pdfs_with_city(cities, pdf_directory):
     return matched_pdfs
 
 def get_embedding_pdf(text, pdf_directory):
-    # 从文本中提取城市名称
+    # 从文本中提取城市名称，jieba
     cities = extract_cities_from_text(text)
     # 根据城市名称匹配PDF文件
     city_to_pdfs = find_pdfs_with_city(cities, pdf_directory)
@@ -168,10 +162,21 @@ def generate_image(prompt):
     return output_path
 
 
+rerank_path = '../model/rerank_model'
+rerank_model_name = 'BAAI/bge-reranker-large'
+
 def load_rerank_model(model_name=rerank_model_name):
     """
     加载重排名模型。
-    
+    pickle 模块是 python 自带的包，可以将 Python 对象进行序列化（serialization） 和反序列化（deserialization）。
+    是将对象转换成一个字节流（byte stream），或将字节流转成为对象。
+
+    操作	函数	描述
+    序列化到文件	    pickle.dump(obj, file)	将对象 obj 序列化后写入文件对象 file。
+    从文件反序列化	obj = pickle.load(file)	从文件对象 file 中读取数据并反序列化为 Python 对象。
+    序列化为字节	    bytes_obj = pickle.dumps(obj)	将对象 obj 序列化为一个字节对象（bytes），而不是直接写入文件。
+    从字节反序列化	obj = pickle.loads(bytes_obj)	将字节对象 bytes_obj 反序列化为 Python 对象。
+
     参数:
     - model_name (str): 模型的名称。默认为 'BAAI/bge-reranker-large'。
     
@@ -210,15 +215,14 @@ def load_rerank_model(model_name=rerank_model_name):
         except Exception as e:
             logger.error(f'Failed to load rerank model: {e}')
 
+#使用重排序模型，重排序，并取指定的前几个内容
 def rerank(reranker, query, contexts, select_num):
         merge = [[query, context] for context in contexts]
         scores = reranker.compute_score(merge)
         sorted_indices = np.argsort(scores)[::-1]
-
         return [contexts[i] for i in sorted_indices[:select_num]]
 
 def embedding_make(text_input, pdf_directory):
-
     city_to_pdfs = get_embedding_pdf(text_input, pdf_directory)
     city_list = []
     for city, pdfs in city_to_pdfs.items():
@@ -250,35 +254,30 @@ def embedding_make(text_input, pdf_directory):
         retriever.k = 20
         bm25_result = retriever.invoke(question)
 
-
         em = EmbeddingModel(config)
         question_vector = em.get_embedding(question)
         pdf_vector_list = []
-        
-        start_time = time.perf_counter()
-
-        em = EmbeddingModel(config)  
         for i in range(len(bm25_result)):
             x = em.get_embedding(bm25_result[i].page_content) 
             pdf_vector_list.append(x)
             time.sleep(0.65)
 
+        # 一个新的二维数组，这个新数组有 1 行，并且列数由 NumPy 自动计算得出。反过来同理，N 行 1 列
+        # -1 代表“未知的维度”，意思是“这个维度的大小请根据数组的总元素数和其他已知的维度来自动推算”
         query_embedding = np.array(question_vector)
         query_embedding = query_embedding.reshape(1, -1)
-
+        # sklearn 开源的 Python 机器学习库。提供了各种用于数据挖掘和数据分析的工具，包括分类、回归、聚类、降维、模型选择和数据预处理等。
         similarities = cosine_similarity(query_embedding, pdf_vector_list)
 
+        emb_list = []
         top_k = 10
         top_k_indices = np.argsort(similarities[0])[-top_k:][::-1]
-
-        emb_list = []
         for idx in top_k_indices:
             all_page = splits[idx].page_content
             emb_list.append(all_page)
         print(len(emb_list))
 
         reranker_model = load_rerank_model()
-
         documents = rerank(reranker_model, question, emb_list, 3)
         logger.info("After rerank...")
         reranked = []
@@ -289,10 +288,8 @@ def embedding_make(text_input, pdf_directory):
 
         model_input = f'你是一个旅游攻略小助手，你的任务是，根据收集到的信息：\n{reranked}.\n来精准回答用户所提出的问题：{question}。'
         print(reranked)
-
         model = ChatModel(config, stream=False)
         output = model.generate([ChatMessage(role="user", content=model_input)])
-
         return output
     else:
         return "请在输入中提及想要咨询的城市！"
@@ -311,8 +308,8 @@ def clear_history(history):
     history.clear()
     return history
 
-# 获取城市信息 
-def get_location_data(location,api_key):  
+# 获取城市信息，获取天气数据
+def get_location_data(location, api_key):
     """  
     向 QWeather API 发送 GET 请求以获取天气数据。  
   
@@ -321,11 +318,9 @@ def get_location_data(location,api_key):
     :return: 响应的 JSON 数据  
     """  
     # 构建请求 URL  
-    url = f"https://geoapi.qweather.com/v2/city/lookup?location={location}&key={api_key}"  
-  
+    url = f"https://geoapi.qweather.com/v2/city/lookup?location={location}&key={api_key}"
     # 发送 GET 请求  
-    response = requests.get(url)  
-  
+    response = requests.get(url)
     # 检查响应状态码  
     if response.status_code == 200:  
         # 返回 JSON 数据  
@@ -336,7 +331,7 @@ def get_location_data(location,api_key):
         print(response.text)  
         return None
     
-# 获取天气  
+# 获取未来几天的天气
 def get_weather_forecast(location_id,api_key):  
     """  
     向QWeather API发送请求以获取未来几天的天气预报。  
@@ -364,21 +359,44 @@ def get_weather_forecast(location_id,api_key):
         # 如果请求不成功，打印错误信息  
         print(f"请求失败，状态码：{response.status_code}，错误信息：{response.text}")  
         return None  
-api_key = os.environ.get("api_key")
+
 
 from openai import OpenAI
+api_key = os.environ.get("api_key")
 client = OpenAI(
         api_key=api_key,
         base_url="https://api.deepseek.com"
 )
-
 # client = OpenAI(
 #         api_key='',
 #         base_url="https://dashscope.aliyuncs.com/compatible-mode/v1"
 # )
 
-amap_key = os.environ.get("amap_key")
 
+def get_location_coordinate(location, city):
+    url = f"https://restapi.amap.com/v5/place/text?key={amap_key}&keywords={location}&region={city}"
+    print(url)
+    r = requests.get(url)
+    result = r.json()
+    if "pois" in result and result["pois"]:
+        return result["pois"][0]
+    return None
+
+def search_nearby_pois(longitude, latitude, keyword):
+    url = f"https://restapi.amap.com/v5/place/around?key={amap_key}&keywords={keyword}&location={longitude},{latitude}"
+    print(url)
+    r = requests.get(url)
+    result = r.json()
+    ans = ""
+    if "pois" in result and result["pois"]:
+        for i in range(min(3, len(result["pois"]))):
+            name = result["pois"][i]["name"]
+            address = result["pois"][i]["address"]
+            distance = result["pois"][i]["distance"]
+            ans += f"{name}\n{address}\n距离：{distance}米\n\n"
+    return ans
+
+# 根据POI名称，获得POI的经纬度坐标
 def get_completion(messages, model="deepseek-chat"):
     response = client.chat.completions.create(
         model=model,
@@ -389,7 +407,6 @@ def get_completion(messages, model="deepseek-chat"):
         tools=[{
             "type": "function",
             "function": {
-
                 "name": "get_location_coordinate",
                 "description": "根据POI名称，获得POI的经纬度坐标",
                 "parameters": {
@@ -436,34 +453,7 @@ def get_completion(messages, model="deepseek-chat"):
     )
     return response.choices[0].message
 
-
-
-
-def get_location_coordinate(location, city):
-    url = f"https://restapi.amap.com/v5/place/text?key={amap_key}&keywords={location}&region={city}"
-    print(url)
-    r = requests.get(url)
-    result = r.json()
-    if "pois" in result and result["pois"]:
-        return result["pois"][0]
-    return None
-
-
-def search_nearby_pois(longitude, latitude, keyword):
-    url = f"https://restapi.amap.com/v5/place/around?key={amap_key}&keywords={keyword}&location={longitude},{latitude}"
-    print(url)
-    r = requests.get(url)
-    result = r.json()
-    ans = ""
-    if "pois" in result and result["pois"]:
-        for i in range(min(3, len(result["pois"]))):
-            name = result["pois"][i]["name"]
-            address = result["pois"][i]["address"]
-            distance = result["pois"][i]["distance"]
-            ans += f"{name}\n{address}\n距离：{distance}米\n\n"
-    return ans
-    
-
+# 地图通，调用工具可以找到任何地址，经纬度坐标
 def process_request(prompt):
     messages = [
         {"role": "system", "content": "你是一个地图通，你可以找到任何地址。"},
@@ -537,12 +527,10 @@ def llm(query, history=[], user_stop_words=[]):
     except Exception as e:
         return str(e)
 
+
 # Travily 搜索引擎
-os.environ['TAVILY_API_KEY'] = os.environ.get("TAVILY_API_KEY")
 tavily = TavilySearchResults(max_results=5)
 tavily.description = '这是一个类似谷歌和百度的搜索引擎，搜索知识、天气、股票、电影、小说、百科等都是支持的哦，如果你不确定就应该搜索一下，谢谢！'
-
-# 工具列表
 tools = [tavily]
 
 tool_names = 'or'.join([tool.name for tool in tools])
@@ -667,10 +655,7 @@ css="""
 
 """
 
-
-
 # 旅行规划师功能
-
 prompt = """你现在是一位专业的旅行规划师，你的责任是根据旅行出发地、目的地、天数、行程风格（紧凑、适中、休闲）、预算、随行人数，帮助我规划旅游行程并生成详细的旅行计划表。请你以表格的方式呈现结果。旅行计划表的表头请包含日期、地点、行程计划、交通方式、餐饮安排、住宿安排、费用估算、备注。所有表头都为必填项，请加深思考过程，严格遵守以下规则：
 
 1. 日期请以DayN为格式如Day1，明确标识每天的行程。
@@ -964,8 +949,6 @@ with gr.Blocks(css=css) as demo:
                 chatbot_audio = gr.Chatbot(label="聊天记录",type="tuples",height= 600)
                 submit_btn_audio.click(process_audio, inputs=[audio_input, chatbot_audio], outputs=[chatbot_audio])
                 clear_btn_audio.click(clear_chat_audio, chatbot_audio, chatbot_audio)
-            
-
             
     with gr.Tab("旅行文案助手"):
         with gr.Row():

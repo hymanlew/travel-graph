@@ -1,13 +1,17 @@
-# 使用AI大模型
+import os
+from langchain_community.tools import TavilySearchResults
+from langchain_openai import ChatOpenAI
+
+
+# 设置代理，设置后，程序中所有后续的 HTTP/HTTPS 请求都会自动通过指定的代理服务器发送
+os.environ['http_proxy'] = '127.0.0.1:10809'
+os.environ['https_proxy'] = '127.0.0.1:10809'
+
 # llm = ChatOpenAI(
 #     temperature=0,
 #     model='deepseek-chat',
 #     api_key="sk-23308eef770c47e9aeb1149038ffb243",
 #     base_url="https://api.deepseek.com")
-import os
-
-from langchain_community.tools import TavilySearchResults
-from langchain_openai import ChatOpenAI
 
 # llm = ChatOpenAI(
 #     temperature=0,
@@ -16,7 +20,6 @@ from langchain_openai import ChatOpenAI
 #     openai_api_base="https://open.bigmodel.cn/api/paas/v4/",
 # )
 
-
 # llm = ChatOpenAI(   # 用的自己的服务器部署的大模型
 #     temperature=0.8,
 #     model="Qwen-7B",
@@ -24,23 +27,12 @@ from langchain_openai import ChatOpenAI
 #     openai_api_base="http://localhost:6006/v1"
 # )
 
-# 设置代理
-os.environ['http_proxy'] = '127.0.0.1:10809'
-os.environ['https_proxy'] = '127.0.0.1:10809'
-
 llm = ChatOpenAI(  # openai的
     temperature=0,
     model='gpt-3.5-turbo',
     api_key="sk-GNNPr4Pl6gSRvbqqLgM8Y0HgZA4NdSzUdgrVuGrhhaSIW2Lu",
     base_url="https://api.chatanywhere.tech//v1"
 )
-
-# llm = ChatOpenAI(  # openai的
-#     temperature=0,
-#     model='claude-3-7-sonnet-20250219',
-#     api_key="sk-doD81WgxSoF9A6xYzhgW7GUh5frRwPETI8mDq3ce4UaWnCPF",
-#     base_url="https://xiaoai.plus/v1")
-
 
 # 初始化搜索工具，限制结果数量为1
 os.environ["TAVILY_API_KEY"] = "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"

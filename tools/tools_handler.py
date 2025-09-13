@@ -2,7 +2,7 @@ from langchain_core.messages import ToolMessage
 from langchain_core.runnables import RunnableLambda
 from langgraph.prebuilt import ToolNode
 
-# 以字典形式，返回出错后对state的更新
+# 以字典形式，返回出错信息，对state的更新
 def handle_tool_error(state) -> dict:
     """
     处理工具调用时发生的错误。

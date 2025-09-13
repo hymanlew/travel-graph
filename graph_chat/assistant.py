@@ -2,7 +2,7 @@ import os
 from datetime import datetime
 
 from langchain_community.tools import TavilySearchResults
-from langchain_core.prompts import ChatPromptTemplate
+from langchain.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.runnables import Runnable, RunnableConfig
 from langchain_openai import ChatOpenAI
 
@@ -27,8 +27,7 @@ class CtripAssistant:
         self.runnable = runnable
 
     # call函数：使类可以像函数一样被调用
-    # 在add_node中使用的类的call函数：接收state与config（与函数写法中只接受state不同），并返回字典形式的，对state的更新
-    # 其中，state与config都需要自定义，其中state在状态图定义时就被绑定，而config在状态图流式执行时才动态传入，形式如下：
+    # 在add_node中使用类的call函数：接收state与config（与函数写法中只接受state不同），并返回字典形式的，对state更新
     # config = {
     #     "configurable": {
     #         # passenger_id用于我们的航班工具，以获取用户的航班信息
@@ -45,10 +44,9 @@ class CtripAssistant:
         :return:
         """
         while True:
-            # 创建了一个无限循环，它将一直执行直到：从 self.runnable 获取的结果是有效的。
+            # 创建了一个无限循环，它将一直执行，直到从 self.runnable 获取的结果是有效的。
             # 如果结果无效（例如，没有工具调用且内容为空或内容不符合预期格式），循环将继续执行，
-            # configuration = config.get('configurable', {})
-            # user_id = configuration.get('passenger_id', None)
+            # user_id = config.get('configurable', {}).get('passenger_id', None)
             # state = {**state, 'user_info': user_id}  # 从配置中得到旅客的ID，也追加到state
             result = self.runnable.invoke(state)
             # 如果，runnable执行完后，没有得到一个实际的输出
@@ -79,7 +77,7 @@ primary_assistant_prompt = ChatPromptTemplate.from_messages(
             "\n\n当前用户的航班信息:\n<Flights>\n{user_info}\n</Fllights>"
             "\n当前时间: {time}.",
         ),
-        ("placeholder", "{messages}"),
+        MessagesPlaceholder(variable_name="messages"),
     ]
 ).partial(time=datetime.now())
 
@@ -91,13 +89,15 @@ primary_assistant_tools = [
 ]
 
 # 创建可运行对象，绑定主助理提示模板和工具集，包括委派给专门助理的工具
-assistant_runnable = primary_assistant_prompt | llm.bind_tools(
-    primary_assistant_tools
-    + [
-        ToFlightBookingAssistant,  # 用于转交航班更新或取消的任务
-        ToBookCarRental,  # 用于转交租车预订的任务
-        ToHotelBookingAssistant,  # 用于转交酒店预订的任务
-        ToBookExcursion,  # 用于转交旅行推荐和其他游览预订的任务
-    ]
-)
+def create_assistant_node():
+    assistant_runnable = primary_assistant_prompt | llm.bind_tools(
+        primary_assistant_tools
+        + [
+            ToFlightBookingAssistant,  # 用于转交航班更新或取消的任务
+            ToBookCarRental,  # 用于转交租车预订的任务
+            ToHotelBookingAssistant,  # 用于转交酒店预订的任务
+            ToBookExcursion,  # 用于转交旅行推荐和其他游览预订的任务
+        ]
+    )
+    return assistant_runnable
 

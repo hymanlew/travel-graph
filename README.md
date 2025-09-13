@@ -87,15 +87,6 @@ AI旅游助手， LangGraph 实现的智能多代理旅行助手系统，通过�
 
 ## 🗂️ 部署步骤
 
-- [详细指南](#2-详细指南)
-  - [数据、模型及工具选型](#21-数据、模型及工具选型)
-  - [基于本地旅游攻略pdf文本文件的RAG系统](#22-基于本地旅游攻略pdf文本文件的RAG系统)
-  - [多模态生成：图生文，TTS和数字人视频合成](#23-多模态生成：图生文，TTS和数字人视频合成)
-  - [旅游问答智能体(Agent)实现](#24-旅游问答智能体(Agent)实现)
-- [案例展示](#3-案例展示)
-- [人员贡献](#4-人员贡献)
-- [ 致谢](#5-致谢)
-
 ### 在线体验
 
 - 目前已将 `LvBan v2.0` 版本部署到modelscope平台，地址: [https://www.modelscope.cn/studios/NumberJys/LvBan](https://www.modelscope.cn/studios/NumberJys/LvBan)
@@ -123,8 +114,8 @@ os.system(f'cd {base_path} && git lfs pull')
 
 # 修改.env文件，添加自己相关的key
 
-gradio app.py
-python3 app.py
+gradio traval_llm_gradio.py
+python3 traval_llm_gradio.py
 ```
 ![](img\成功页面.png)
 
@@ -149,26 +140,31 @@ python3 app.py
 
 ### 旅游 RAG 系统
 
-该项目的RAG系统，首先从用户的查询中提取关键信息（如城市名称、地点名称等），并通过这些信息检索匹配的pdf文件，提取相关内容并计算其嵌入向量。然后利用BM25检索和向量检索技术，筛选出与用户查询相似度较高的文本块。在此基础上，利用重排序模型对这些文本块进行进一步排序，最终选择最相关的内容提供给星火大模型。星火大模型根据这些上下文信息，生成对用户问题的准确回答。其详细技术实现流程：
+该项目的RAG系统，其详细技术实现流程：app.py 文件。
+
+- 首先从用户的查询中提取关键信息（如城市名称、地点名称等），并通过这些信息检索匹配的 pdf 文件。
+- 提取 pdf 中的相关内容，分割，然后利用 BM25 检索和向量检索技术，筛选出与用户查询相似度较高的文本块。
+- 在此基础上计算其嵌入向量及相似度，取出最前几个文本块。
+- 利用重排序模型对这些文本块进行进一步排序，最终选择最相关的内容提供给星火大模型。星火大模型根据这些上下文信息，生成对用户问题的准确回答。
 
 **文本处理与文档匹配**
 
-- 城市提取（extract_cities_from_text）：使用jieba进行中文分词，提取query文本中提及的地名（城市名称）。
+- 城市提取（extract_cities_from_text）：使用 jieba 进行中文分词，提取 query 文本中提及的地名（城市名称）。
 - PDF文件匹配（find_pdfs_with_city）：根据提取的城市名称，在指定目录下寻找包含这些城市名称的pdf文件。
-  
+
 
 **嵌入生成与文档处理**
 
 - PDF内容提取与分割（embedding_make）：
-  - 1. 根据用户输入的文本，调用get_embedding_pdf函数提取相关的PDF文件。
-  - 2. 从提取的pdf文件中读取文本内容，并对内容进行清理和分割，使用RecursiveCharacterTextSplitter将文本按(chunk_size=1000, chunk_overlap=300)进行切分，以便后续处理。
-  - 3. 使用BM25Retriever对切分后的文本块进行初步检索，获得与用户问题最相关前20个文档片段。
+  - 1. 根据用户输入的文本，调用 get_embedding_pdf 函数提取相关的PDF文件。
+  - 2. 从提取的pdf文件中读取文本内容，并对内容进行清理和分割，使用 RecursiveCharacterTextSplitter 将文本按(chunk_size=1000, chunk_overlap=300) 进行切分，以便后续处理。
+  - 3. 使用 BM25Retriever 对切分后的文本块进行初步检索，获得与用户问题最相关前20个文档片段。
     
 
 **嵌入计算与相似度匹配**
 
-- 嵌入计算：
-  - 1. 通过加载的EmbeddingModel(星火文本向量模型)，为用户的查询问题和检索到的文档片段生成嵌入向量。
+- 嵌入计算（embedding_make）：
+  - 1. 通过加载的 EmbeddingModel(星火文本向量模型)，为用户的查询问题和检索到的文档片段生成嵌入向量。
   - 2. 使用余弦相似度（cosine_similarity）计算查询问题与文档片段之间的相似度。
   - 3. 根据相似度选择最相关的前10个文档片段。
     
@@ -176,66 +172,29 @@ python3 app.py
 **文档重排序与生成回答**
 
 - 重排序（rerank）：加载预训练的重排序模型(BAAI/bge-reranker-large)，对初步选出的文档片段进行进一步排序，选择出最相关的3个片段。
-- 生成回答：
+- 生成回答（embedding_make）：
   - 1. 将重排序后的文档片段整合，并形成模型输入（通过指定的格式，将上下文和问题整合）。
   - 2. 调用ChatModel(星火大语言模型)生成最终回答，并返回给用户。
 
-### 多模态及数字人合成
-
-![](img\多模态生成v2.0.png)
-
-
-通过将文本数据处理成音频数据后同视频一起输入，先使用脚本处理视频，该脚本首先会预先进行必要的预处理，例如人脸检测、人脸解析和 VAE 编码等。对音频和图片通过唇同步模型处理，生成对应唇形的照片，匹配所有的音频，最终将音频与生成的图片合成为视频输出。
-
-<h3 id="2-4"> 旅游问答智能体(Agent)实现</h3>
+**旅游问答智能体(Agent)实现**
 
 - 查询天气Agent: 利用星火大模型（Spark3.5 Max）和 和风天气API实现联网搜索Agent。
 - 附近搜索Agent: 利用星火大模型（Spark3.5 Max）和高德地图API实现附近搜索Agent。该Agent系统可以根据用户输入的文本请求，星火大模型自动判断是否需要调用高德地图API。若提问关于附近地址查询问题，则调用地图服务来获取地点信息和附近POI，目的帮助用户查询特定地点的周边设施、提供地址信息等，反之，其他问题，不调用高德地图API。
 - 联网搜索Agent：利用星火大模型（Spark3.5 Max）和 Travily 搜索引擎API实现联网搜索Agent。
 
-<center><img src="https://github.com/yaosenJ/LvBanGPT/blob/main/img/Agent.png" style="zoom:40%;" />
+![](img\Agent.png)
 
-### 语音识别对话
+### 多模态及数字人合成
 
-运行asr.py即可
-<center><img src="https://github.com/yaosenJ/LvBanGPT/blob/main/img/asr.png" style="zoom:40%;" />
-<center><img src="https://github.com/yaosenJ/LvBanGPT/blob/main/img/asr_record.png" style="zoom:40%;" />
-### 案例展示
+通过将文本数据处理成音频数据后同视频一起输入，先使用脚本处理视频，该脚本首先会预先进行必要的预处理，例如人脸检测、人脸解析和 VAE 编码等。对音频和图片通过唇同步模型处理，生成对应唇形的照片，匹配所有的音频，最终将音频与生成的图片合成为视频输出。：app.py 文件。
 
-- 旅游规划助手
-  <img src="https://github.com/yaosenJ/LvBanGPT/blob/LvBan_v2.0/img/%E6%97%85%E6%B8%B8%E8%A7%84%E5%88%92v2.0.png" alt="Demo" >
-- 知识库问答(RAG:true)
-  <img src="https://github.com/yaosenJ/LvBanGPT/blob/LvBan_v2.0/img/%E7%9F%A5%E8%AF%86%E5%BA%93%E9%97%AE%E7%AD%94v2.0_1.png" alt="Demo" >
-- 知识库问答(RAG:false)
-  <img src="https://github.com/yaosenJ/LvBanGPT/blob/LvBan_v2.0/img/%E7%9F%A5%E8%AF%86%E5%BA%93%E9%97%AE%E7%AD%94v2.0_2.png" alt="Demo" >
-- 附近查询&联网搜索&天气查询
-  <img src="https://github.com/yaosenJ/LvBanGPT/blob/LvBan_v2.0/img/%E5%AE%9E%E5%86%B5%E6%9F%A5%E8%AF%A2v2.0.png" alt="Demo" >
-- 旅游文案助手
-  <img src="https://github.com/yaosenJ/LvBanGPT/blob/LvBan_v2.0/img/%E6%97%85%E6%B8%B8%E6%96%87%E6%A1%88v2.0.png" alt="Demo" >
-
-```htaccess
-<details>
-<summary>LvBan_v1.5案例展示</summary>
-<br>
-<h2 id="3"> 案例展示 </h2>
-<p align="center">
-  <img src="https://github.com/yaosenJ/LvBanGPT/blob/main/img/%E6%97%85%E6%B8%B8%E6%94%BB%E7%95%A5.png" alt="Demo" >
-  <img src="https://github.com/yaosenJ/LvBanGPT/blob/main/img/RAG.png" alt="Demo" >
-  <img src="https://github.com/yaosenJ/LvBanGPT/blob/main/img/%E5%A4%A9%E6%B0%94%E6%9F%A5%E8%AF%A2.png" alt="Demo" >
-  <img src="https://github.com/yaosenJ/LvBanGPT/blob/main/img/%E9%99%84%E8%BF%91%E6%90%9C%E7%B4%A2.png" alt="Demo" >
-  <img src="https://github.com/yaosenJ/LvBanGPT/blob/main/img/%E8%81%94%E7%BD%91%E6%90%9C%E7%B4%A2.png" alt="Demo" >
-  <img src="https://github.com/yaosenJ/LvBanGPT/blob/main/img/%E6%96%87%E6%A1%88%E7%94%9F%E6%88%90.png" alt="Demo" >
-</p>
-</details>
-```
+![](img\多模态生成v2.0.png)
 
 ## 本地图项目流程
 
-### 定义部分
+### 主入口节点
 
-#### 主入口节点(fetch_user_info)
-
-首先由Start节点进入主入口(fetch_user_info), 对应执行的函数为查询数据库中, 与用户航班相关的一切信息, 并将结果存入state的user_info中, 结果格式如下:
+首先由 Start 节点进入主入口（fetch_user_info)，对应执行的函数为查询数据库中，与用户航班相关的一切信息, 并将结果存入state的user_info 中, 结果格式如下:
 
 ```python
 {

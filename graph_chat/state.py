@@ -1,5 +1,4 @@
 from typing import TypedDict, Annotated, Optional, Literal
-
 from langchain_core.messages import AnyMessage
 from langgraph.graph import add_messages
 
@@ -17,7 +16,7 @@ def update_dialog_stack(left: list[str], right: Optional[str]) -> list[str]:
     if right is None:
         return left  # 如果right是None，保持当前状态栈不变
     if right == "pop":
-        return left[:-1]  # 如果right是"pop"，移除栈顶元素（即最后一个状态）
+        return left[:-1]  # 如果right是"pop"，移除栈顶元素（最后一个状态），即只返回第一个到倒数第二个元素的新列表
     return left + [right]  # 否则，将right添加到状态栈中
 
 

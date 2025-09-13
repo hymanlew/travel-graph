@@ -6,10 +6,10 @@ from langgraph.constants import START
 from langgraph.graph import StateGraph
 from langgraph.prebuilt import tools_condition
 from tools.flights_tools import fetch_user_flight_information
-from graph_chat.assistant import create_assistant_node, part_1_tools
+from graph_chat.assistant import create_assistant_node, primary_assistant_tools
 from graph_chat.draw_png import draw_graph
 from graph_chat.state import State
-from tools.init_db import update_dates
+from utils.init_db import update_dates
 from tools.tools_handler import create_tool_node_with_fallback, _print_event
 
 # 定义了一个流程图的构建对象
@@ -17,7 +17,7 @@ builder = StateGraph(State)
 
 def get_user_info(state: State):
     """
-    获取用户的航班信息并更新状态字典。
+    查数据库，获取用户的航班信息并更新状态字典。
     参数:
         state (State): 当前状态字典。
     返回:
@@ -28,17 +28,15 @@ def get_user_info(state: State):
 
 # 新增：fetch_user_info节点首先运行，这意味着我们的助手可以在不采取任何行动的情况下看到用户的航班信息
 builder.add_node('fetch_user_info', get_user_info)
-builder.add_edge(START, 'fetch_user_info')
-
-# 自定义函数代表节点，Runnable，或者一个自定义的类都可以是节点
+# 自定义函数代表助手节点，Runnable，或者一个自定义的类都可以是节点
 builder.add_node('assistant', create_assistant_node())
 # 添加一个名为"tools"的节点，该节点创建了一个带有回退机制的工具节点
-builder.add_node('tools', create_tool_node_with_fallback(part_1_tools))
+builder.add_node('tools', create_tool_node_with_fallback(primary_assistant_tools))
+
 # 定义边：这些边决定了控制流如何移动
-# 从起始点START到"assistant"节点添加一条边
+builder.add_edge(START, 'fetch_user_info')
 builder.add_edge('fetch_user_info', "assistant")
 # 从"assistant"节点根据条件判断添加到其他节点的边
-# 使用tools_condition来决定哪些条件满足时应跳转到哪些节点
 builder.add_conditional_edges(
     "assistant",
     tools_condition,
@@ -53,7 +51,6 @@ memory = MemorySaver()
 # 编译状态图，配置检查点为memory, 配置中断点
 graph = builder.compile(checkpointer=memory, interrupt_before=['tools'],)
 
-#
 draw_graph(graph, '../graph_chat/graph2.png')
 
 session_id = str(uuid.uuid4())
@@ -78,7 +75,7 @@ while True:
         print('对话结束，拜拜！')
         break
     else:
-        events = graph.stream({'messages': ('user', question)}, config, stream_mode='values')
+        events = graph.stream({'messages': [HumanMessage(content='hello')]}, config, stream_mode='values')
         # 打印消息
         for event in events:
             _print_event(event, _printed)

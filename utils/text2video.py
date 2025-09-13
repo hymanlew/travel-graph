@@ -49,6 +49,7 @@
 
 # if  __name__ == '__main__':
 #     main()
+
 import requests
 
 def text_to_speech(text):
@@ -100,9 +101,18 @@ def text_to_speech(text):
     except requests.RequestException as e:
         return f"请求出现异常: {str(e)}"
 
-def main():
-    text = input("输入要转语音的文本:\n")
-    text_to_speech(text)
+def creatVideo(a, v):
+    return
 
-if  __name__ == '__main__':
-    main()
+def text2audio_url(text):
+    audio_url = text_to_speech(text)
+    return audio_url
+
+def text2video(text, video_path):
+    # 文本转语音，线上
+    audio_url = text2audio_url(text)
+    print(audio_url)  # 音频URL  # 请将此URL 转为您的音频播放器播放
+
+    # 线上执行生成视频，生成后，下载到目标路径 video_path
+    creatVideo(audio_url,video_path)
+    return video_path

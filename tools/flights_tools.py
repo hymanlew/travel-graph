@@ -8,17 +8,19 @@ from langchain_core.tools import tool
 db = "../travel_new.sqlite"  # 数据库文件名
 
 
-@tool #　定义装饰器，声明这是一个工具，可被 LangChain 的 Runnable 对象调用 —— Runnable 是 LangChain 的核心，即可运行组件，是可以像函数一样被调用的对象
-      #  可运行组件（Runnable） 是 LangChain 的核心抽象，任何能接收输入并输出结果的组件（函数、模型、链、工具）都可以是 Runnable，
-      #  可以通过 .invoke()、.stream() 等方法被调用，从而实现统一的组合与调用方式。
+# 当工具函数（被 @tool 装饰的函数）签名中包含一个类型为 RunnableConfig 的参数时，LangChain 会在调用时自动将当前的配置对象注入到这个参数中。
+# 且 LangChain 会将函数被包装成一个 Runnable 对象，可以无缝集成到 LCEL 链、Agent、LangGraph 工作流中
+# LangGraph 的许多内置组件（如 ToolNode）已经处理了 config 的传递，因此调用此函数时，不需要显示传入 config 参数。
+# Runnable 是 LangChain 的核心，即可运行组件，可以将函数转换为可被调用的 Runnable 对象，任何能接收输入并输出结果的组件（函数、模型、链、工具）都可以是 Runnable，
+# 可以通过 .invoke()、.stream() 等方法被调用，从而实现统一的组合与调用方式。
+@tool
 def fetch_user_flight_information(config: RunnableConfig) -> List[Dict]:
     """
     此函数通过给定的乘客ID，从数据库中获取该乘客的所有机票信息及其相关联的航班信息和座位分配情况。
     返回:
         包含每张机票的详情、关联航班的信息及座位分配的字典列表。
     """
-    configuration = config.get("configurable", {})
-    passenger_id = configuration.get("passenger_id", None)
+    passenger_id = config.get("configurable", {}).get("passenger_id", None)
     if not passenger_id:
         raise ValueError("未配置乘客 ID。")
 
@@ -46,7 +48,6 @@ def fetch_user_flight_information(config: RunnableConfig) -> List[Dict]:
 
     cursor.close()
     conn.close()
-
     return results
 
 
@@ -128,8 +129,7 @@ def update_ticket_to_new_flight(
     返回:
     - str: 操作结果的消息。
     """
-    configuration = config.get("configurable", {})
-    passenger_id = configuration.get("passenger_id", None)
+    passenger_id = config.get("configurable", {}).get("passenger_id", None)
     if not passenger_id:
         raise ValueError("未配置乘客 ID。")
 
