@@ -1,6 +1,21 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, validator
 
-class CompleteOrEscalate(BaseModel):  # 定义数据模型类 —— 只要继承了BaseModel，就可以被当做工具使用（信号型）
+# 所有继承自BaseModel的类都可以作为工具使用。这是因为LangChain会自动将这些模型转换为工具定义（llm.bind_tools）：
+# - 类名成为工具名
+# - 类的文档字符串成为工具描述
+# - 字段定义成为工具参数
+# 定义数据模型类，只要继承了BaseModel，就可以被当做工具使用（信号型，通知要调用助手节点），即调用实际上是在 LLM 的响应中返回一个工具调用的指示，而不是直接执行代码。
+# LLM会根据对话上下文和字段描述来提取或生成相应的值（类中字段的值），并匹配到对应的类工具。
+# Config类中的json_schema_extra提供了一个示例，这有助于LLM理解如何填充这个工具的参数。
+
+# 实际执行时，LangGraph框架会根据这个响应（信号）将控制流转到对应的节点（需要在图中定义好节点与边），在那里才会真正执行相关的操作。
+# 因此，这个类工具不仅是一个函数调用，还是一个工作流转交的指令，它触发了图中不同部分（子图）的激活。
+
+# 它与 tool 装饰的工具是两类工具。
+# - 后者称为功能型工具，一般是调用某个接口来得到结果，有明确的输入与输出。
+# - 而继承自 BaseModel 类的工具称为信号型工具，其没有输入、输出，而是负责存储一些属性。
+# 在帮助模型明确了属性的作用后（通过类名、类注释、示例等），模型会在认为需要调用工具或属性需要修改时，自动调用工具进行相应的操作。
+class CompleteOrEscalate(BaseModel):
     """
     一个工具，用于标记当前任务为已完成和/或将对话的控制权升级到主助理，
     主助理可以根据用户的需求重新路由对话。
@@ -33,7 +48,7 @@ class ToFlightBookingAssistant(BaseModel):
     """
 
     request: str = Field(
-        description="更新航班助理在继续之前需要澄清的任何后续问题。"
+        description="更新航班，助理在继续之前需要澄清的任何后续问题。"
     )
 
 
@@ -75,6 +90,13 @@ class ToHotelBookingAssistant(BaseModel):
     request: str = Field(
         description="用户关于酒店预订的任何额外信息或请求。"
     )
+
+    # 验证器确保结束日期不早于开始日期
+    @validator('checkout_date')
+    def end_date_after_start_date(cls, v, values):
+        if 'checkin_date' in values and v < values['checkin_date']:
+            raise ValueError('结束日期必须晚于开始日期')
+        return v
 
     class Config:
         json_schema_extra = {

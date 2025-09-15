@@ -9,44 +9,31 @@ from graph_chat.agent_assistant import update_flight_runnable, update_flight_sen
     book_excursion_sensitive_tools
 from graph_chat.assistant import CtripAssistant
 from graph_chat.base_data_model import CompleteOrEscalate
-from graph_chat.entry_node import create_entry_node
 from tools.tools_handler import create_tool_node_with_fallback
 
 
 # 航班助手的子工作流 —— 传入主工作流，传回添加了子工作流后的主工作流
 def build_flight_graph(builder: StateGraph) -> StateGraph:
-    # 更新航班的入口节点 —— 一个过渡节点，在实际执行操作之前能更清晰地提示模型自己的身份与任务
-    # 注意，add_node 的参数是节点名与要执行的函数，但不是返回函数的实例而是返回函数本身，即不加括号！
+    """更新航班的入口节点"""
+
+    # 注意，add_node 的参数是节点名与要执行的函数（函数本身即不加括号）或类的实例（有 call 调用方法）- 函数不传实例传对象，类则传实例。
     # 之所以这里有括号且传了参数，是因为是一个闭包的写法，其内部返回的函数是函数对象本身！
-    # 这个闭包写法相当于：
-    # builder.add_node(
-    #     "enter_update_flight",
-    #     entry_node # 明面上的函数返回的真正函数，框架会自动传递state给它，它负责输出更新state的字典
-    #     而由于它被定义在外层函数里面，因此它可以接收外层函数接受的参数
-    #     之所以要用这种函数相互嵌套的闭包写法，是因为不同的助手节点创造的节点信息也是不同的
-    #     因此要把参数传给不同的助手，而add_node又规定其中的函数能且仅能以唯一的state作为输入，因此只能使用闭包
-    #     闭包达到的效果是，实际执行时传入的参数只有state，但传给外部函数的参数也可以被使用，达到了传入三个参数的效果
-    # )
+    # 使用闭包时，框架会自动传递state给它，它负责输出更新state的字典，而由于它被定义在外层函数里面，因此它可以接收外层函数接受的参数
+    # 之所以要用这种函数相互嵌套的闭包写法，是因为不同的助手节点创造的节点信息也是不同的
+    #
+    # 因此要把参数传给不同的助手，而add_node又规定其中的函数能且仅能以唯一的state作为输入，因此只能使用闭包
+    # 闭包达到的效果是，实际执行时传入的参数只有state，但传给外部函数的参数也可以被使用，达到了传入三个参数的效果
     builder.add_node(
         "enter_update_flight",
         # 这里实际上是一个闭包写法，创建入口节点，指定助理名称和新对话状态
         create_entry_node("Flight Updates & Booking Assistant", "update_flight"),
     )
-
     # 添加处理航班更新的实际节点
-    # 这里的 update_flight_runnable 是一个定义好的，绑定了工具（查询、修改、取消航班）并设好了提示词（告知模型自己负责更新航班）的模型
-    # 这里是 add_node 的类写法，即传参是不再是传入一个函数对象，而是传入一个类实例 —— 特别注意，函数不传实例传对象，类则传实例！
-    # 因此，CtripAssistant(update_flight_runnable)就是一个类实例，通过 __init__ 得到
-    # 在 Python 中，对于类 x，x()就得到了一个类实例，而这个过程会先调用默认的new方法，创建类实例，再调用init方法，给类的属性赋值
-    # 此时，这个类还应具有call方法，即能够被当成函数使用，其返回的也是关于state的更新
     builder.add_node("update_flight", CtripAssistant(update_flight_runnable))
-    # 连接入口节点到实际处理节点（这样的边在绘图中体现为实线边，唯一且一定会执行）
-    builder.add_edge("enter_update_flight", "update_flight")
-
     # 添加敏感工具和安全工具的节点
-    # 这里是add_node的另一种写法：既不是传递函数对象，也不是传递类实例，而是传递一个函数实例，这个函数实例返回了一个类实例
+    # 这是add_node的另一种写法：既不是传递函数对象，也不是传递类实例，而是传递一个函数实例，这个函数实例返回了一个类实例
     # 也就是说，这种写法间接地相当于传递了类实例
-    # 这个类实例实现的功能为，当发生错误时，返回对应的，要更新的state（在message中提示发生错误）
+    # 这个类实例实现的功能为，当发生错误时，返回对应的要更新的state（在message中提示发生错误）
     builder.add_node(
         "update_flight_sensitive_tools",
         create_tool_node_with_fallback(update_flight_sensitive_tools),  # 敏感工具节点，包含可能修改数据的操作
@@ -55,6 +42,9 @@ def build_flight_graph(builder: StateGraph) -> StateGraph:
         "update_flight_safe_tools",
         create_tool_node_with_fallback(update_flight_safe_tools),  # 安全工具节点，通常只读查询
     )
+
+    # 连接入口节点到实际处理节点（这样的边在绘图中体现为实线边，唯一且一定会执行）
+    builder.add_edge("enter_update_flight", "update_flight")
 
     def route_update_flight(state: dict):
         """
@@ -67,19 +57,17 @@ def build_flight_graph(builder: StateGraph) -> StateGraph:
         route = tools_condition(state)
         if route == END:
             return END  # 无工具调用则直接结束
+
         tool_calls = state["messages"][-1].tool_calls  # 获取最后一条消息中的工具调用
         # 最近的记录中，是否至少有一个调用了 CompleteOrEscalate
         did_cancel = any(tc["name"] == CompleteOrEscalate.__name__ for tc in tool_calls)
         if did_cancel:
             return "leave_skill"  # 如果用户请求取消或退出，则跳转至leave_skill节点
+
         safe_tool_names = [t.name for t in update_flight_safe_tools]  # 获取所有安全工具的名字
         if all(tc["name"] in safe_tool_names for tc in tool_calls):  # 如果所有调用的工具都是安全工具
             return "update_flight_safe_tools"  # 跳转至安全工具处理节点
         return "update_flight_sensitive_tools"  # 否则跳转至敏感工具处理节点
-
-    # 添加边，连接敏感工具和安全工具节点回到航班更新处理节点
-    builder.add_edge("update_flight_sensitive_tools", "update_flight")
-    builder.add_edge("update_flight_safe_tools", "update_flight")
 
     # 根据条件路由航班更新流程
     builder.add_conditional_edges(
@@ -87,6 +75,9 @@ def build_flight_graph(builder: StateGraph) -> StateGraph:
         route_update_flight,
         ["update_flight_sensitive_tools", "update_flight_safe_tools", "leave_skill", END], # 下一个可能的节点
     )
+    # 添加边，连接敏感工具和安全工具节点回到航班更新处理节点
+    builder.add_edge("update_flight_sensitive_tools", "update_flight")
+    builder.add_edge("update_flight_safe_tools", "update_flight")
 
     # 此节点将用于所有子助理的退出
     def pop_dialog_state(state: dict) -> dict:
@@ -127,8 +118,6 @@ def build_car_graph(builder: StateGraph) -> StateGraph:
         create_entry_node("Car Rental Assistant", "book_car_rental"),  # 创建入口节点，指定助理名称和新对话状态
     )
     builder.add_node("book_car_rental", CtripAssistant(book_car_rental_runnable))  # 添加处理租车预订的实际节点
-    builder.add_edge("enter_book_car_rental", "book_car_rental")  # 连接入口节点到实际处理节点
-
     # 添加安全工具和敏感工具的节点
     builder.add_node(
         "book_car_rental_safe_tools",
@@ -138,6 +127,8 @@ def build_car_graph(builder: StateGraph) -> StateGraph:
         "book_car_rental_sensitive_tools",
         create_tool_node_with_fallback(book_car_rental_sensitive_tools),  # 敏感工具节点，包含可能修改数据的操作
     )
+
+    builder.add_edge("enter_book_car_rental", "book_car_rental")  # 连接入口节点到实际处理节点
 
     def route_book_car_rental(state: dict):
         """
@@ -278,3 +269,43 @@ def builder_excursion_graph(builder: StateGraph) -> StateGraph:
         ["book_excursion_safe_tools", "book_excursion_sensitive_tools", "leave_skill", END],
     )
     return builder
+
+
+
+from typing import Callable
+from langchain_core.messages import ToolMessage
+
+def create_entry_node(assistant_name: str, new_dialog_state: str) -> Callable: # 返回类型为另一个函数
+    """
+    这是一个函数工程： 创建一个入口节点函数，当对话状态转换时（主助理将当前对话转交给专门处理的子助理时）调用。
+    该函数生成一条新的对话消息，并更新对话的状态。
+
+    :param assistant_name: 新助理的名字或描述。
+    :param new_dialog_state: 要更新到的新对话状态。
+    :return: 返回一个根据给定的assistant_name和new_dialog_state处理对话状态的函数。
+    """
+
+    def entry_node(state: dict) -> dict:
+        """
+        根据当前对话状态生成新的对话消息并更新对话状态。
+        :param state: 当前对话状态，包含所有消息。
+        :return: 包含新消息和更新后的对话状态的字典。
+        """
+        # 获取最后一个消息中的工具调用ID
+        tool_call_id = state["messages"][-1].tool_calls[0]["id"]
+
+        return {
+            "messages": [
+                ToolMessage(
+                    content=f"现在助手是{assistant_name}。请回顾上述主助理与用户之间的对话。"
+                            f"用户的意图尚未满足，现在需要使用提供的工具协助用户。记住，您是{assistant_name}，"
+                            "并且预订、更新或其他操作未完成，直到成功调用了适当的工具。"
+                            "如果用户改变主意或需要帮助进行其他任务，请调用CompleteOrEscalate函数让主要的主助理接管。"
+                            "不要提及你是谁——仅作为助理的代理。",
+                    tool_call_id=tool_call_id,
+                )
+            ],
+            "dialog_state": new_dialog_state,
+        }
+
+    return entry_node

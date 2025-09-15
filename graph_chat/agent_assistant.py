@@ -1,7 +1,6 @@
 from datetime import datetime
 
-from langchain_core.prompts import ChatPromptTemplate
-
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from graph_chat.base_data_model import CompleteOrEscalate
 from graph_chat.llm_tavily import llm
 from tools.car_tools import search_car_rentals, book_car_rental, update_car_rental, cancel_car_rental
@@ -22,10 +21,10 @@ flight_booking_prompt = ChatPromptTemplate.from_messages(
             "请记住，在相关工具成功使用后，预订才算完成。"
             "\n\n当前用户的航班信息:\n<Flights>\n{user_info}\n</Flights>"
             "\n当前时间: {time}."
-            "\n\n如果用户需要帮助，并且您的工具都不适用，则"
-            '“CompleteOrEscalate”对话给主助理。不要浪费用户的时间。不要编造无效的工具或功能。',
+            "\n\n如果用户需要帮助，并且您的工具都不适用，则调用"
+            '“CompleteOrEscalate”将对话交给主助理。不要浪费用户的时间。不要编造无效的工具或功能。',
         ),
-        ("placeholder", "{messages}"),
+        MessagesPlaceholder(variable_name="{messages}"),
     ]
 ).partial(time=datetime.now())
 
@@ -33,18 +32,10 @@ flight_booking_prompt = ChatPromptTemplate.from_messages(
 update_flight_safe_tools = [search_flights]
 update_flight_sensitive_tools = [update_ticket_to_new_flight, cancel_ticket]
 
-# 合并所有工具
-update_flight_tools = update_flight_safe_tools + update_flight_sensitive_tools
-
 # 创建可运行对象，绑定航班预订提示模板和工具集，包括CompleteOrEscalate工具
 update_flight_runnable = flight_booking_prompt | llm.bind_tools(
-    update_flight_tools + [CompleteOrEscalate]
+    update_flight_safe_tools + update_flight_sensitive_tools + [CompleteOrEscalate]
 )
-# 这里的 CompleteOrEscalate 是一个类工具，继承了 BaseModel ；它与之前的 update_flight_tools 是两类工具
-# update_flight_tools被称为功能型工具，一般是调用某个接口来得到结果，有明确的输入与输出
-# 而继承自 BaseModel 类的 CompleteOrEscalate 被称为信号型工具，其没有输入、输出，而是负责存储一些属性
-# 在帮助模型明确了属性的作用后（通过类名、类注释、示例等），模型会在认为属性需要修改时自动调用工具修改属性，之后就可以根据属性进行必要的判断
-
 
 # 酒店预订助手
 book_hotel_prompt = ChatPromptTemplate.from_messages(
@@ -67,7 +58,7 @@ book_hotel_prompt = ChatPromptTemplate.from_messages(
             " - '哦，等等，我还没预订航班，我会先订航班'\n"
             " - '酒店预订已确认'",
         ),
-        ("placeholder", "{messages}"),
+        MessagesPlaceholder(variable_name="{messages}"),
     ]
 ).partial(time=datetime.now())
 
@@ -75,12 +66,9 @@ book_hotel_prompt = ChatPromptTemplate.from_messages(
 book_hotel_safe_tools = [search_hotels]
 book_hotel_sensitive_tools = [book_hotel, update_hotel, cancel_hotel]
 
-# 合并所有工具
-book_hotel_tools = book_hotel_safe_tools + book_hotel_sensitive_tools
-
 # 创建可运行对象，绑定酒店预订提示模板和工具集，包括CompleteOrEscalate工具
 book_hotel_runnable = book_hotel_prompt | llm.bind_tools(
-    book_hotel_tools + [CompleteOrEscalate]
+    book_hotel_safe_tools + book_hotel_sensitive_tools + [CompleteOrEscalate]
 )
 
 # 租车预订助手
@@ -104,7 +92,7 @@ book_car_rental_prompt = ChatPromptTemplate.from_messages(
             " - '哦，等等，我还没预订航班，我会先订航班'\n"
             " - '租车预订已确认'",
         ),
-        ("placeholder", "{messages}"),
+        MessagesPlaceholder(variable_name="{messages}"),
     ]
 ).partial(time=datetime.now())
 
@@ -116,12 +104,9 @@ book_car_rental_sensitive_tools = [
     cancel_car_rental,
 ]
 
-# 合并所有工具
-book_car_rental_tools = book_car_rental_safe_tools + book_car_rental_sensitive_tools
-
 # 创建可运行对象，绑定租车预订提示模板和工具集，包括CompleteOrEscalate工具
 book_car_rental_runnable = book_car_rental_prompt | llm.bind_tools(
-    book_car_rental_tools + [CompleteOrEscalate]
+    book_car_rental_safe_tools + book_car_rental_sensitive_tools + [CompleteOrEscalate]
 )
 
 # 游览预订助手
@@ -152,10 +137,7 @@ book_excursion_prompt = ChatPromptTemplate.from_messages(
 book_excursion_safe_tools = [search_trip_recommendations]
 book_excursion_sensitive_tools = [book_excursion, update_excursion, cancel_excursion]
 
-# 合并所有工具
-book_excursion_tools = book_excursion_safe_tools + book_excursion_sensitive_tools
-
 # 创建可运行对象，绑定游览预订提示模板和工具集，包括CompleteOrEscalate工具
 book_excursion_runnable = book_excursion_prompt | llm.bind_tools(
-    book_excursion_tools + [CompleteOrEscalate]
+    book_excursion_safe_tools + book_excursion_sensitive_tools + [CompleteOrEscalate]
 )

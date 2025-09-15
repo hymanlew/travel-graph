@@ -1,6 +1,7 @@
 from typing import TypedDict, Annotated, Optional, Literal
 from langchain_core.messages import AnyMessage
 from langgraph.graph import add_messages
+from pydantic import BaseModel, Field
 
 
 def update_dialog_stack(left: list[str], right: Optional[str]) -> list[str]:
@@ -18,6 +19,15 @@ def update_dialog_stack(left: list[str], right: Optional[str]) -> list[str]:
     if right == "pop":
         return left[:-1]  # 如果right是"pop"，移除栈顶元素（最后一个状态），即只返回第一个到倒数第二个元素的新列表
     return left + [right]  # 否则，将right添加到状态栈中
+
+
+class UserInfo(BaseModel):
+    """用户信息模型"""
+    passenger_id: str = Field(..., description="乘客ID")
+    name: str = Field(..., description="乘客姓名")
+    email: str = Field(..., description="邮箱地址")
+    phone: str = Field(..., description="联系电话")
+    frequent_flyer: Optional[str] = Field(None, description="常旅客号码")
 
 
 # 状态类
@@ -39,7 +49,9 @@ class State(TypedDict):
                                     "book_hotel", "book_excursion"]]): 指示当前对话是跟哪个助手进行的
     """
     messages: Annotated[list[AnyMessage], add_messages]
-    user_info: str
+    user_info: Optional[UserInfo]
+    status: Optional[Literal["pending", "approved", "rejected", "requires_revision", "canceled"]]  # 审批状态
+    reject_count: int
     # 严格限定为上述五个字符串值之一，确保了对话状态管理的一致性和正确性，避免了意外的状态值导致的潜在问题
     dialog_state: Annotated[
         list[
@@ -53,3 +65,7 @@ class State(TypedDict):
         ],
         update_dialog_stack,
     ]
+    # 审计追踪字段
+    session_id: Optional[str]  # 会话ID
+    created_at: Optional[str]  # 创建时间
+    last_updated: Optional[str]  # 最后更新时间

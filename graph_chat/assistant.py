@@ -48,7 +48,7 @@ class CtripAssistant:
             # 创建了一个无限循环，它将一直执行，直到从 self.runnable 获取的结果是有效的。
             # 如果结果无效（例如，没有工具调用且内容为空或内容不符合预期格式），循环将继续执行，
             # user_id = config.get('configurable', {}).get('passenger_id', None)
-            # state = {**state, 'user_info': user_id}  # 从配置中得到旅客的ID，也追加到state
+            # state = {**state, 'user_info': user_id}  # 从配置中得到旅客的ID，也追加到state，是创建一个新的字典
             result = self.runnable.invoke(state)
             # 如果结果中没有工具调用，并且内容为空或内容列表的第一个元素没有"text"，则需要重新提示用户输入。
             # 如果，runnable执行完后，没有得到一个实际的输出
@@ -82,6 +82,14 @@ primary_assistant_prompt = ChatPromptTemplate.from_messages(
         MessagesPlaceholder(variable_name="messages"),
     ]
 ).partial(time=datetime.now())
+
+sensitive_tool_names = ['update_ticket_to_new_flight', 'cancel_ticket', 'search_flights']
+
+sensitive_tools = [
+    search_flights,
+    update_ticket_to_new_flight,
+    cancel_ticket,
+]
 
 # 定义主助理使用的工具
 primary_assistant_tools = [

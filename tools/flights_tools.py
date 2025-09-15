@@ -4,6 +4,7 @@ from typing import Optional, List, Dict
 import pytz
 from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import tool
+from graph_chat.state import UserInfo
 
 db = "../travel_new.sqlite"  # 数据库文件名
 
@@ -48,6 +49,14 @@ def fetch_user_flight_information(config: RunnableConfig) -> List[Dict]:
 
     cursor.close()
     conn.close()
+
+    # return UserInfo(
+    #     passenger_id=config["configurable"]["passenger_id"],
+    #     name="张三",
+    #     email="zhangsan@example.com",
+    #     phone="13800138000",
+    #     frequent_flyer="CA12345678"
+    # )
     return results
 
 
