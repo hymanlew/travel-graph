@@ -1,7 +1,7 @@
 from datetime import datetime
 
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
-from graph_chat.base_data_model import CompleteOrEscalate
+from tools.base_class_tool import CompleteOrEscalate
 from graph_chat.llm_tavily import llm
 from tools.car_tools import search_car_rentals, book_car_rental, update_car_rental, cancel_car_rental
 from tools.flights_tools import search_flights, update_ticket_to_new_flight, cancel_ticket

@@ -1,4 +1,4 @@
-from graph_chat.log_utils import log
+from utils.log_utils import log
 
 
 def draw_graph(graph, file_name: str):

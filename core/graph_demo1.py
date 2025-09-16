@@ -8,7 +8,7 @@ from langgraph.graph.message import add_messages
 from langgraph.prebuilt import ToolNode, tools_condition
 from langgraph.types import interrupt, Command
 from tools.flights_tools import fetch_user_flight_information
-from graph_chat.assistant import primary_assistant_tools, sensitive_tool_names, sensitive_tools, create_assistant_node
+from graph_chat.base_assistant import primary_assistant_tools, sensitive_tool_names, sensitive_tools, create_assistant_node
 from graph_chat.draw_png import draw_graph
 from graph_chat.state import State
 from utils.init_db import update_dates

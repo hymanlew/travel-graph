@@ -7,8 +7,8 @@ from graph_chat.agent_assistant import update_flight_runnable, update_flight_sen
     book_car_rental_runnable, book_car_rental_safe_tools, book_car_rental_sensitive_tools, book_hotel_runnable, \
     book_hotel_safe_tools, book_hotel_sensitive_tools, book_excursion_runnable, book_excursion_safe_tools, \
     book_excursion_sensitive_tools
-from graph_chat.assistant import CtripAssistant
-from graph_chat.base_data_model import CompleteOrEscalate
+from graph_chat.base_assistant import CtripAssistant
+from tools.base_class_tool import CompleteOrEscalate
 from tools.tools_handler import create_tool_node_with_fallback
 
 
@@ -149,10 +149,6 @@ def build_car_graph(builder: StateGraph) -> StateGraph:
             return "book_car_rental_safe_tools"  # 跳转至安全工具处理节点
         return "book_car_rental_sensitive_tools"  # 否则跳转至敏感工具处理节点
 
-    # 添加边，连接敏感工具和安全工具节点回到租车预订处理节点
-    builder.add_edge("book_car_rental_sensitive_tools", "book_car_rental")
-    builder.add_edge("book_car_rental_safe_tools", "book_car_rental")
-
     # 根据条件路由租车预订流程
     builder.add_conditional_edges(
         "book_car_rental",
@@ -164,6 +160,10 @@ def build_car_graph(builder: StateGraph) -> StateGraph:
             END,
         ],
     )
+
+    # 添加边，连接敏感工具和安全工具节点回到租车预订处理节点
+    builder.add_edge("book_car_rental_sensitive_tools", "book_car_rental")
+    builder.add_edge("book_car_rental_safe_tools", "book_car_rental")
     return builder
 
 
